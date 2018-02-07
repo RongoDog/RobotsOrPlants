@@ -3,26 +3,29 @@
 #include<stdlib.h>
 #include <sys/types.h>
 
-#define OUTPUT_PIN_E_1 14
-#define OUTPUT_PIN_B_1 15
-#define OUTPUT_PIN_A_1 18
-
-
+#define OUTPUT_PIN_E 14
+#define OUTPUT_PIN_A 15
 
 #define MICRO_SEC_IN_SEC 1000000
 
-int main() {
+bool initializePump(){ //returns 1 if failure to initialize
 	
 	if (gpioInitialise() < 0) {
 		fprintf(stderr, "Failed to initialize GPIO interface");
-		exit(1);
+		return 1;
 	}
-	gpioSetMode(OUTPUT_PIN_E_1, PI_OUTPUT);
-	gpioSetMode(OUTPUT_PIN_B_1, PI_OUTPUT);
-	gpioSetMode(OUTPUT_PIN_A_1, PI_OUTPUT);
-	gpioWrite(OUTPUT_PIN_E_1, 1);
-	gpioWrite(OUTPUT_PIN_B_1, 0);
-	gpioWrite(OUTPUT_PIN_A_1, 1);
+	gpioSetMode(OUTPUT_PIN_E, PI_OUTPUT);
 
-	exit(0);
+	gpioWrite(OUTPUT_PIN_E, 0);
+	gpioWrite(OUTPUT_PIN_A, 1);
+	
+	return 0;
+}
+
+void DrivePump(){
+	gpioWrite(OUTPUT_PIN_E, 1);
+}
+
+void StopDrivingPump(){
+	gpioWrite(OUTPUT_PIN_E, 0);
 }
