@@ -2,24 +2,7 @@
 #include<stdio.h>
 #include<stdlib.h>
 #include <sys/types.h>
-
-//this is the left motor
-#define OUTPUT_PIN_E_1 14
-#define OUTPUT_PIN_B_1 15
-#define OUTPUT_PIN_A_1 18
-
-//this is the right motor
-#define OUTPUT_PIN_E_2 17
-#define OUTPUT_PIN_B_2 27
-#define OUTPUT_PIN_A_2 22
-
-#define MICRO_SEC_IN_SEC 1000000
-
-typedef struct time_tracker {
-	long int start;
-	long int end;
-	long int current_distance;
-} time_tracker;
+#include <Motors.h>
 
 bool MotorsInit(){ //returns 1 if failure to initialize
 	
@@ -27,6 +10,7 @@ bool MotorsInit(){ //returns 1 if failure to initialize
 		fprintf(stderr, "Failed to initialize GPIO interface");
 		return 1;
 	}
+	
 	gpioSetMode(OUTPUT_PIN_E_1, PI_OUTPUT);
 	gpioSetMode(OUTPUT_PIN_B_1, PI_OUTPUT);
 	gpioSetMode(OUTPUT_PIN_A_1, PI_OUTPUT);
