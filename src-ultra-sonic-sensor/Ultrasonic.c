@@ -1,6 +1,5 @@
 #include <Ultrasonic.h>
 
-
 void callback_function(int gpio, int level, unsigned int tick, void *t) {
 	if (level == 1) {
 		((time_tracker *)t)->start = tick;

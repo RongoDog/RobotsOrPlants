@@ -1,3 +1,6 @@
+#ifndef Ultrasonic_h /* include guard */
+#define Ultrasonic_h
+ 
 #include <pigpio.h>
 #include<stdio.h>
 #include<stdlib.h>
@@ -20,4 +23,5 @@ typedef struct time_tracker {
 
 
 void callback_function(int gpio, int level, unsigned int tick, void *t);
-
+ 
+#endif
