@@ -1,13 +1,4 @@
-#include <pigpio.h>
-#include<stdio.h>
-#include<stdlib.h>
-#include <sys/types.h>
-
-#define OUTPUT_PIN_E 14
-#define OUTPUT_PIN_B 15
-#define OUTPUT_PIN_A 18
-
-#define MICRO_SEC_IN_SEC 1000000
+#include <Pump.h>
 
 bool initializePump(){ //returns 1 if failure to initialize
 	
@@ -31,3 +22,4 @@ void DrivePump(){
 void StopDrivingPump(){
 	gpioWrite(OUTPUT_PIN_E, 0);
 }
+
