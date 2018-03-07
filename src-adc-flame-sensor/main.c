@@ -19,6 +19,7 @@
 #define RESET_REGISTER 0x0F // Allow a software reset
 
 #define LSB_PIN 4
+#define RESET_PIN 17
 
 void handleWriteError(int returnVal) {
 	if (returnVal == PI_BAD_HANDLE) {
@@ -30,9 +31,19 @@ void handleWriteError(int returnVal) {
 	}
 }
 
+void handleReadError(int returnVal) {
+	if (returnVal == PI_BAD_HANDLE) {
+		fprintf(stderr, "Bad handle\n");
+	} else if (returnVal == PI_BAD_PARAM) {
+		fprintf(stderr, "Bad parameter\n");
+	} else if (returnVal == PI_I2C_READ_FAILED) {
+		fprintf(stderr, "Read failed\n");
+	}
+}
+
 // Opens the i2c bus to the ADC
 int open_i2c_bus() { 
-	int handle = i2cOpen(1, 0b0010011, 0);
+	int handle = i2cOpen(1, 0b0010001, 0);
 	if (handle < 0) {
 		if (handle == PI_BAD_I2C_BUS) {
 			fprintf(stderr, "Bad I2C Bus\n");
@@ -107,14 +118,48 @@ int main() {
 
 	gpioSetMode(LSB_PIN, PI_OUTPUT);
 	gpioWrite(LSB_PIN, 1);
+	gpioWrite(RESET_PIN, 0);
 
+	gpioSetMode(RESET_PIN, PI_OUTPUT);
+	gpioWrite(RESET_PIN, 1);
+	gpioDelay(100000);
+	gpioWrite(RESET_PIN, 0);
+	gpioDelay(100000);
+	gpioWrite(RESET_PIN, 1);
+	
 	open_i2c_bus();
 	int handle = open_i2c_bus();
 	if (handle < 0) {
 		exit(1);
 	}
 
+	int returnVal;
 
+	returnVal = i2cReadWordData(handle, GENERAL_PURPOSE_CONTROL_REGISTER);
+	if (returnVal < 0) {
+		handleReadError(returnVal);
+		fprintf(stderr, "Failed to read general purpose register\n");
+		exit(1);
+	}
+	fprintf(stdout, "The general purpose control reg value is: %d\n", returnVal);
+
+	returnVal = i2cWriteWordData(handle, GENERAL_PURPOSE_CONTROL_REGISTER, 0x0003);
+	if (returnVal < 0) {
+		handleWriteError(returnVal);
+		fprintf(stderr, "Failed to write to general purpose control register\n");
+		exit(1);
+	}
+
+	returnVal = i2cReadWordData(handle, GENERAL_PURPOSE_CONTROL_REGISTER);
+	if (returnVal < 0) {
+		handleReadError(returnVal);
+		fprintf(stderr, "Failed to read general purpose register\n");
+		exit(1);
+	}
+	fprintf(stdout, "The general purpose control reg value is: %d\n", returnVal);
+
+	
+	/*
 	gpioDelay(1000000);
 	char bytes[] = {0x0F, 0x0D, 0xAC}; 
 	int returnVal = i2cWriteDevice(handle, bytes, 3);
@@ -123,6 +168,7 @@ int main() {
 		fprintf(stderr, "Software reset failed\n");
 		exit(1);
 	}
+	*/
 
 	exit(0);
 
