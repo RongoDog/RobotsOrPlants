@@ -1,0 +1,1 @@
+void *initialize_flame_sensors(void *arg);

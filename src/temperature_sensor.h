@@ -1,0 +1,1 @@
+void *initialize_temperature_sensor(void *arg);
