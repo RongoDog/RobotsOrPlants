@@ -1,58 +1,116 @@
 #include <pigpio.h>
-#include<stdio.h>
-#include<stdlib.h>
-#include <sys/types.h>
+#include <stdlib.h>
 
-#define OUTPUT_PIN_E_1 14
-#define OUTPUT_PIN_B_1 15
-#define OUTPUT_PIN_A_1 18
+#define OUTPUT_PIN_E_LEFT 14
+#define OUTPUT_PIN_A_LEFT 15
+#define OUTPUT_PIN_B_LEFT 18
 
-#define OUTPUT_PIN_E_2 17
-#define OUTPUT_PIN_B_2 27
-#define OUTPUT_PIN_A_2 22
+#define OUTPUT_PIN_E_RIGHT 25
+#define OUTPUT_PIN_A_RIGHT 8
+#define OUTPUT_PIN_B_RIGHT 7
+
+#define OUTPUT_PIN_E_PUMP 10
+#define OUTPUT_PIN_A_PUMP 9
+#define OUTPUT_PIN_B_PUMP 11
 
 
+void drive_forward() {
+	gpioWrite(OUTPUT_PIN_E_RIGHT, 1);
+	gpioWrite(OUTPUT_PIN_A_RIGHT, 1);
+	gpioWrite(OUTPUT_PIN_B_RIGHT, 0);
 
-#define MICRO_SEC_IN_SEC 1000000
+	gpioWrite(OUTPUT_PIN_E_LEFT, 1);
+	gpioWrite(OUTPUT_PIN_A_LEFT, 1);
+	gpioWrite(OUTPUT_PIN_B_LEFT, 0);
+}
 
-typedef struct time_tracker {
-	long int start;
-	long int end;
-	long int current_distance;
-} time_tracker;
+void drive_backward() {
+	gpioWrite(OUTPUT_PIN_E_RIGHT, 1);
+	gpioWrite(OUTPUT_PIN_A_RIGHT, 0);
+	gpioWrite(OUTPUT_PIN_B_RIGHT, 1);
+
+	gpioWrite(OUTPUT_PIN_E_LEFT, 1);
+	gpioWrite(OUTPUT_PIN_A_LEFT, 0);
+	gpioWrite(OUTPUT_PIN_B_LEFT, 1);
+}
+
+void arc_left() {
+	gpioWrite(OUTPUT_PIN_E_RIGHT, 1);
+	gpioWrite(OUTPUT_PIN_A_RIGHT, 1);
+	gpioWrite(OUTPUT_PIN_B_RIGHT, 0);
+
+	gpioWrite(OUTPUT_PIN_E_LEFT, 0);
+	gpioWrite(OUTPUT_PIN_A_LEFT, 0);
+	gpioWrite(OUTPUT_PIN_B_LEFT, 0);
+}
+
+void arc_right() {
+	gpioWrite(OUTPUT_PIN_E_RIGHT, 0);
+	gpioWrite(OUTPUT_PIN_A_RIGHT, 0);
+	gpioWrite(OUTPUT_PIN_B_RIGHT, 0);
+
+	gpioWrite(OUTPUT_PIN_E_LEFT, 1);
+	gpioWrite(OUTPUT_PIN_A_LEFT, 1);
+	gpioWrite(OUTPUT_PIN_B_LEFT, 0);
+}
+
+void sharp_left() {
+	gpioWrite(OUTPUT_PIN_E_RIGHT, 1);
+	gpioWrite(OUTPUT_PIN_A_RIGHT, 1);
+	gpioWrite(OUTPUT_PIN_B_RIGHT, 0);
+
+	gpioWrite(OUTPUT_PIN_E_LEFT, 1);
+	gpioWrite(OUTPUT_PIN_A_LEFT, 0);
+	gpioWrite(OUTPUT_PIN_B_LEFT, 1);
+}
+
+void sharp_right() {
+	gpioWrite(OUTPUT_PIN_E_RIGHT, 1);
+	gpioWrite(OUTPUT_PIN_A_RIGHT, 0);
+	gpioWrite(OUTPUT_PIN_B_RIGHT, 1);
+
+	gpioWrite(OUTPUT_PIN_E_LEFT, 1);
+	gpioWrite(OUTPUT_PIN_A_LEFT, 1);
+	gpioWrite(OUTPUT_PIN_B_LEFT, 0);
+}
+
+void motors_off() {
+	gpioWrite(OUTPUT_PIN_E_RIGHT, 0);
+	gpioWrite(OUTPUT_PIN_A_RIGHT, 0);
+	gpioWrite(OUTPUT_PIN_B_RIGHT, 0);
+
+	gpioWrite(OUTPUT_PIN_E_LEFT, 0);
+	gpioWrite(OUTPUT_PIN_A_LEFT, 0);
+	gpioWrite(OUTPUT_PIN_B_LEFT, 0);
+}
+
+void pump_on() {
+	gpioWrite(OUTPUT_PIN_E_PUMP, 1);
+	gpioWrite(OUTPUT_PIN_A_PUMP, 1);
+	gpioWrite(OUTPUT_PIN_B_PUMP, 0);
+}
+
+void pump_off() {
+	gpioWrite(OUTPUT_PIN_E_PUMP, 0);
+	gpioWrite(OUTPUT_PIN_A_PUMP, 0);
+	gpioWrite(OUTPUT_PIN_B_PUMP, 0);
+}
 
 int main() {
 	if (gpioInitialise() < 0) {
-		fprintf(stderr, "Failed to initialize GPIO interface");
 		exit(1);
 	}
-	gpioSetMode(OUTPUT_PIN_E_1, PI_OUTPUT);
-	gpioSetMode(OUTPUT_PIN_B_1, PI_OUTPUT);
-	gpioSetMode(OUTPUT_PIN_A_1, PI_OUTPUT);
-	
-	gpioSetMode(OUTPUT_PIN_E_2, PI_OUTPUT);
-	gpioSetMode(OUTPUT_PIN_B_2, PI_OUTPUT);
-	gpioSetMode(OUTPUT_PIN_A_2, PI_OUTPUT);
-
-	gpioWrite(OUTPUT_PIN_E_1, 1);
-	gpioWrite(OUTPUT_PIN_B_1, 0);
-	gpioWrite(OUTPUT_PIN_A_1, 1);
-
-	gpioWrite(OUTPUT_PIN_E_2, 1);
-	gpioWrite(OUTPUT_PIN_B_2, 0);
-	gpioWrite(OUTPUT_PIN_A_2, 1);
-
-
-	gpioDelay(MICRO_SEC_IN_SEC * 2);
-
-	gpioWrite(OUTPUT_PIN_B_1, 1);
-	gpioWrite(OUTPUT_PIN_A_1, 0);
-	gpioWrite(OUTPUT_PIN_B_2, 1);
-	gpioWrite(OUTPUT_PIN_A_2, 0);
-
-	gpioDelay(MICRO_SEC_IN_SEC * 2);
-
-	gpioWrite(OUTPUT_PIN_E_1, 0);
-	gpioWrite(OUTPUT_PIN_E_2, 0);
-	exit(0);
+	gpioSetMode(OUTPUT_PIN_E_PUMP, PI_OUTPUT); 
+	gpioSetMode(OUTPUT_PIN_A_PUMP, PI_OUTPUT); 
+	gpioSetMode(OUTPUT_PIN_B_PUMP, PI_OUTPUT); 
+	gpioSetMode(OUTPUT_PIN_E_LEFT, PI_OUTPUT); 
+	gpioSetMode(OUTPUT_PIN_A_LEFT, PI_OUTPUT); 
+	gpioSetMode(OUTPUT_PIN_B_LEFT, PI_OUTPUT); 
+	drive_backward();
+	pump_off();
+	while(1) {
+		//pump_on();
+		gpioDelay(100000);
+		gpioDelay(100000);
+	}
 }

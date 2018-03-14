@@ -127,7 +127,7 @@ int read_sensor(int handle, int mux) {
 	fprintf(stdout, "The conversion reg value is: [%x %x]\n", 
 		(int)(0xFF & returnVal), (int)(0xFF & (returnVal >> 8)));
 
-	return convert_to_integer(0xFF & returnVal, 0xFF & (returnVal >> 8));
+	return convert_to_integer(0xFF & (returnVal >> 8), 0xFF & returnVal);
 
 }
 
