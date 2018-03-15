@@ -2,6 +2,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
+#include "temperature_sensor.h"
+#include "robot_i2c.h"
+
 void *intialize_temperature_sensor(void *arg) {
 	int handle;
 	handle = i2cOpen(1, 0x40, 0);

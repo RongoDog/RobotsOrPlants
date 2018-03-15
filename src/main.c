@@ -5,6 +5,18 @@
 #include <stdlib.h>
 #include <pigpio.h>
 
+typedef enum states_enum
+{
+    searching = 0,
+    safety = 1,
+    pinpointing = 2,
+    redirect = 3,
+    attack_flame = 4
+    extinguish_flame = 5
+} states;
+
+states current_state;
+
 int main() {
     // Begin by initializing gpio
     if (gpioInitialise() < 0) {
@@ -14,6 +26,7 @@ int main() {
     
     // The motors should be initially off, but their gpio set
     initialize_motors();
+    current_state = searching;
     
     // We need threads for all our sensors
     pthread_t flame_sensor_thread;

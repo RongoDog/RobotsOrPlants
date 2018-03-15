@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include "flame_sensors.h"
+#include "robot_i2c.h"
 
 #define DEFAULT_ADDRESS 0x48
 #define POINTER_CONVERSION 0x00
