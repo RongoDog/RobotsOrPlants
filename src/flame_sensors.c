@@ -4,6 +4,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <semaphore.h>
+#include <sys/msg.h>
 #include "flame_sensors.h"
 #include "pinout_definitions.h"
 
@@ -32,6 +33,33 @@
 #define SINGLE_SHOT_READ_A1 0x83D3
 #define SINGLE_SHOT_READ_A2 0x83E3
 #define SINGLE_SHOT_READ_A3 0x83F3
+
+sem_t *i2c_semaphore;
+int *message_queue_id;
+struct direction_data current_direction;
+
+void send_flame_data(double sensor_value, direction dir)
+{
+	struct sensor_message my_msg;
+	struct sensor_data data;
+	data.type = flame_data;
+	data.value = sensor_value;
+	data.dir = dir;
+
+	my_msg.data = data;
+	my_msg.msg_key = SENSOR_MESSAGE;
+	msgsnd(*message_queue_id, (void *)&my_msg, sizeof(data), IPC_NOWAIT);
+}
+
+int receive_control_data(struct direction_data *dir)
+{
+    struct flame_sensor_message my_msg;
+    if (msgrcv(*message_queue_id, (void *)&my_msg, sizeof(*dir), FLAME_SENSOR_CONTROL_MESSAGE, IPC_NOWAIT) == -1) {
+        return(-1);
+    }
+    *dir = my_msg.data;
+    return(0);
+}
 
 void handleWriteError(int returnVal) {
 	if (returnVal == PI_BAD_HANDLE) {
@@ -84,20 +112,20 @@ int convert_to_integer(int low_bit, int high_bit) {
 
 // This function applies a configuration to the
 // ADS1015 ADC and then reads the conversion value. 
-int read_sensor(int handle, int mux, sem_t *i2c_semaphore) {
+int read_sensor(int handle, direction mux, sem_t *i2c_semaphore) {
 	
 	int16_t config_value;
 	switch(mux) {
-		case 0: 
+		case front: 
 			config_value = SINGLE_SHOT_READ_A0;
 			break;
-		case 1: 
+		case left: 
 			config_value = SINGLE_SHOT_READ_A1;
 			break;
-		case 2: 
+		case right: 
 			config_value = SINGLE_SHOT_READ_A2;
 			break;
-		case 3: 
+		case back: 
 			config_value = SINGLE_SHOT_READ_A3;
 			break;
 		default: 
@@ -107,7 +135,7 @@ int read_sensor(int handle, int mux, sem_t *i2c_semaphore) {
 	sem_wait(i2c_semaphore);
 	int returnVal = i2cWriteWordData(handle, POINTER_CONFIG, config_value);
 	if (returnVal < 0) {
-		//handleWriteError(returnVal);
+		handleWriteError(returnVal);
 		fprintf(stderr, "Failed to write to configuration register\n");
 		return -1;
 	}
@@ -116,7 +144,7 @@ int read_sensor(int handle, int mux, sem_t *i2c_semaphore) {
 	sem_wait(i2c_semaphore);
 	returnVal = i2cReadWordData(handle, POINTER_CONVERSION);
 	if (returnVal < 0) {
-		//handleReadError(returnVal);
+		handleReadError(returnVal);
 		fprintf(stderr, "Failed to read from conversion register\n");
 		return -1;
 	}
@@ -130,7 +158,12 @@ int read_sensor(int handle, int mux, sem_t *i2c_semaphore) {
 }
 
 void *initialize_flame_sensors(void *arg) {
-	sem_t *i2c_semaphore = (sem_t *)arg;
+	struct thread_info *info = (struct thread_info *)arg;
+	i2c_semaphore = info->semaphore;
+	message_queue_id = info->message_queue_id;
+
+	// Set the default direction
+	current_direction.value = not_specified; 
 
 	sem_wait(i2c_semaphore);
 	int handle = open_i2c_bus();
@@ -140,11 +173,17 @@ void *initialize_flame_sensors(void *arg) {
 	sem_post(i2c_semaphore);
 	
 	// This is the main while loop
-	int current_sensor = 0;
 	int converted_value;
+	int next_direction = front; 
 	while(1) { 
-		converted_value = read_sensor(handle, current_sensor, i2c_semaphore);
-		current_sensor = (current_sensor + 1)%4; 
+		converted_value = read_sensor(handle, next_direction, i2c_semaphore);
+		send_flame_data(converted_value, next_direction);
+		receive_control_data(&current_direction);
+		if (current_direction.value == not_specified) {
+			next_direction = ((int)next_direction + 1)%4; 
+		} else {
+			next_direction = current_direction.value;
+		}
 	}
 	exit(0);
 

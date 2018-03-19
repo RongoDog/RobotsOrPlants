@@ -1,5 +1,6 @@
 #include <pigpio.h>
 #include <sys/types.h>
+#include <sys/msg.h>
 #include "pinout_definitions.h"
 #include "ultra_sonic_sensor.h"
 
@@ -8,11 +9,26 @@
 #define MIN_RANGE_LENGTH 2
 #define MAX_RANGE_LENGTH 500
 
+int *message_queue_id;
+
 typedef struct time_tracker {
 	long int start;
 	long int end;
-	long int current_distance;
 } time_tracker;
+
+void send_distance_data(double distance)
+{
+	struct sensor_message my_msg;
+	struct sensor_data data;
+	data.type = distance_data;
+	data.value = distance;
+	data.dir = front;
+
+	my_msg.data = data;
+	my_msg.msg_key = SENSOR_MESSAGE;
+	msgsnd(*message_queue_id, (void *)&my_msg, sizeof(data), IPC_NOWAIT);
+}
+
 
 void callback_function(int gpio, int level, unsigned int tick, void *t) {
 	if (level == 1) {
@@ -21,18 +37,20 @@ void callback_function(int gpio, int level, unsigned int tick, void *t) {
 	} else if (level == 0) {
 		((time_tracker *)t)->end = tick;
 		long int elapsed_time = (((time_tracker *)t)->end)-(((time_tracker *)t)->start);
-		long int distance = elapsed_time/USECOND_CENTIMETER_RATIO;
+		double distance = (double)elapsed_time/USECOND_CENTIMETER_RATIO;
 		if (distance < MIN_RANGE_LENGTH || distance > MAX_RANGE_LENGTH) {
 			// We skip this reading since it is erronous either a loop in the tick
 			// counter or a hardware error. 
 			return;
 		}
-		((time_tracker*)t)->current_distance = elapsed_time/USECOND_CENTIMETER_RATIO;
-		// Do something with output
+		send_distance_data(distance);
 	}
 }
 
 void *initialize_vision(void *arg) {
+	struct thread_info *info = (struct thread_info *)arg;
+	message_queue_id = info->message_queue_id;
+
 	gpioSetMode(ULTRA_SONIC_OUTPUT_PIN, PI_OUTPUT); 
 	gpioSetMode(ULTRA_SONIC_INPUT_PIN, PI_INPUT);
 

@@ -3,11 +3,31 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <semaphore.h>
+#include <sys/msg.h>
 #include "temperature_sensor.h"
 #include "pinout_definitions.h"
 
+sem_t *i2c_semaphore;
+int *message_queue_id;
+
+void send_temperature_data(double temperature)
+{
+	struct sensor_message my_msg;
+	struct sensor_data data;
+	data.type = temperature_data;
+	data.value = temperature;
+	data.dir = not_specified;
+
+	my_msg.data = data;
+	my_msg.msg_key = SENSOR_MESSAGE;
+	msgsnd(*message_queue_id, (void *)&my_msg, sizeof(data), IPC_NOWAIT);
+}
+
 void *initialize_temperature_sensor(void *arg) {
-	sem_t *i2c_semaphore = (sem_t *)arg;
+	struct thread_info *info = (struct thread_info *)arg;
+	i2c_semaphore = info->semaphore;
+	message_queue_id = info->message_queue_id;
+
 	sem_wait(i2c_semaphore);
 	int handle;
 	handle = i2cOpen(1, 0x40, 0);
@@ -52,10 +72,7 @@ void *initialize_temperature_sensor(void *arg) {
 			exit(0);
 		}
 		sem_post(i2c_semaphore);
-		fprintf(stdout, "The ms byte returned is %d\n", msByte);
-		fprintf(stdout, "The ls byte returned is %d\n", lsByte);
 		temp = (175.72 * (msByte * 256.0 + lsByte) / 65536.0) - 46.85;
-		// Do something with value
-		fprintf(stdout, "The temperature is %f\n", temp);
+		send_temperature_data(temp);
 	}
 }
