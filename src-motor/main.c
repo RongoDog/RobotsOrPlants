@@ -86,8 +86,8 @@ void motors_off() {
 
 void pump_on() {
 	gpioWrite(OUTPUT_PIN_E_PUMP, 1);
-	gpioWrite(OUTPUT_PIN_A_PUMP, 1);
-	gpioWrite(OUTPUT_PIN_B_PUMP, 0);
+	gpioWrite(OUTPUT_PIN_A_PUMP, 0);
+	gpioWrite(OUTPUT_PIN_B_PUMP, 1);
 }
 
 void pump_off() {
@@ -106,11 +106,19 @@ int main() {
 	gpioSetMode(OUTPUT_PIN_E_LEFT, PI_OUTPUT); 
 	gpioSetMode(OUTPUT_PIN_A_LEFT, PI_OUTPUT); 
 	gpioSetMode(OUTPUT_PIN_B_LEFT, PI_OUTPUT); 
-	drive_backward();
-	pump_off();
+	motors_off();
+	int current_dir = 1;
 	while(1) {
-		//pump_on();
-		gpioDelay(100000);
-		gpioDelay(100000);
+		if (current_dir) {
+			current_dir = 0;
+			pump_on();
+			drive_forward();
+		} else {
+			current_dir = 1;
+			pump_off();
+			drive_backward();
+		}
+		gpioDelay(1000000);
+
 	}
 }

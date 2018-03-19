@@ -10,6 +10,12 @@
 #include <sys/msg.h>
 
 static int message_queue_id = -1; 
+static int temp_data;
+static int dist_data;
+static int flame_data_front;
+static int flame_data_back;
+static int flame_data_left;
+static int flame_data_right;
 
 typedef enum states_enum
 {
@@ -101,6 +107,28 @@ int main() {
             fprintf(stderr, "Failed to receive sensor data\n");
             continue;
         }
+        switch (received_data.type) {
+            case temperature_data:
+                temp_data = received_data.value;
+            case flame_data:
+                switch (received_data.dir) {
+                    case front:
+                        flame_data_front = received_data.value;
+                    case back:
+                        flame_data_back = received_data.value;
+                    case left:
+                        flame_data_left = received_data.value;
+                    case right:
+                        flame_data_right = received_data.value;
+                    default: 
+                        continue;
+                }
+            case distance_data:
+                dist_data = received_data.value;
+            default:
+                continue;
+        }
+
         // Interpret
     }
 
