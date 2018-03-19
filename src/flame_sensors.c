@@ -3,8 +3,9 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <semaphore.h>
 #include "flame_sensors.h"
-#include "robot_i2c.h"
+#include "pinout_definitions.h"
 
 #define DEFAULT_ADDRESS 0x48
 #define POINTER_CONVERSION 0x00
@@ -83,30 +84,43 @@ int convert_to_integer(int low_bit, int high_bit) {
 
 // This function applies a configuration to the
 // ADS1015 ADC and then reads the conversion value. 
-int read_sensor(int handle, int mux) {
+int read_sensor(int handle, int mux, sem_t *i2c_semaphore) {
 	
 	int16_t config_value;
 	switch(mux) {
-		0: SINGLE_SHOT_READ_A0;
-		1: SINGLE_SHOT_READ_A1;
-		2: SINGLE_SHOT_READ_A2;
-		3: SINGLE_SHOT_READ_A3;
-		default: SINGLE_SHOT_READ_A0;
+		case 0: 
+			config_value = SINGLE_SHOT_READ_A0;
+			break;
+		case 1: 
+			config_value = SINGLE_SHOT_READ_A1;
+			break;
+		case 2: 
+			config_value = SINGLE_SHOT_READ_A2;
+			break;
+		case 3: 
+			config_value = SINGLE_SHOT_READ_A3;
+			break;
+		default: 
+			config_value = SINGLE_SHOT_READ_A0;
 	}
+
+	sem_wait(i2c_semaphore);
 	int returnVal = i2cWriteWordData(handle, POINTER_CONFIG, config_value);
 	if (returnVal < 0) {
-		handleWriteError(returnVal);
+		//handleWriteError(returnVal);
 		fprintf(stderr, "Failed to write to configuration register\n");
 		return -1;
 	}
+	sem_post(i2c_semaphore);
 	gpioDelay(MICRO_SEC_IN_SEC/DATA_RATE + MICRO_SEC_IN_SEC/100);
-
+	sem_wait(i2c_semaphore);
 	returnVal = i2cReadWordData(handle, POINTER_CONVERSION);
 	if (returnVal < 0) {
-		handleReadError(returnVal);
+		//handleReadError(returnVal);
 		fprintf(stderr, "Failed to read from conversion register\n");
 		return -1;
 	}
+	sem_post(i2c_semaphore);
 	fprintf(stdout, "The direct return value is %d\n", returnVal);
 	fprintf(stdout, "The conversion reg value is: [%x %x]\n", 
 		(int)(0xFF & returnVal), (int)(0xFF & (returnVal >> 8)));
@@ -116,16 +130,20 @@ int read_sensor(int handle, int mux) {
 }
 
 void *initialize_flame_sensors(void *arg) {
+	sem_t *i2c_semaphore = (sem_t *)arg;
 
+	sem_wait(i2c_semaphore);
 	int handle = open_i2c_bus();
 	if (handle < 0) {
 		exit(1);
 	}
+	sem_post(i2c_semaphore);
 	
 	// This is the main while loop
 	int current_sensor = 0;
+	int converted_value;
 	while(1) { 
-		int converted_value = read_sensor(handle, current_sensor);
+		converted_value = read_sensor(handle, current_sensor, i2c_semaphore);
 		current_sensor = (current_sensor + 1)%4; 
 	}
 	exit(0);

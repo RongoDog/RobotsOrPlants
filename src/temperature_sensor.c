@@ -2,10 +2,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
+#include <semaphore.h>
 #include "temperature_sensor.h"
-#include "robot_i2c.h"
+#include "pinout_definitions.h"
 
-void *intialize_temperature_sensor(void *arg) {
+void *initialize_temperature_sensor(void *arg) {
+	sem_t *i2c_semaphore = (sem_t *)arg;
+	sem_wait(i2c_semaphore);
 	int handle;
 	handle = i2cOpen(1, 0x40, 0);
 	if (handle < 0) {
@@ -22,18 +25,22 @@ void *intialize_temperature_sensor(void *arg) {
 		}
 		exit(1);
 	}
+	sem_post(i2c_semaphore);
 
 	int writeReturnCode;
 	int msByte;
 	int lsByte;
 	double temp;
 	while(1) { 
+		sem_wait(i2c_semaphore);
 		writeReturnCode = i2cWriteByte(handle, 0xF3);
 		if (writeReturnCode < 0) {
 			fprintf(stderr, "Write failed\n");
 			exit(0);
 		}
-		gpioDelay(0.5 * MICRO_SEC_IN_SEC);
+		sem_post(i2c_semaphore);
+		gpioDelay(0.1 * MICRO_SEC_IN_SEC);
+		sem_wait(i2c_semaphore);
 		msByte = i2cReadByte(handle);
 		if (msByte < 0) {
 			fprintf(stderr, "Failed to read msByte\n");
@@ -44,6 +51,7 @@ void *intialize_temperature_sensor(void *arg) {
 			fprintf(stderr, "Failed to read lsByte\n");
 			exit(0);
 		}
+		sem_post(i2c_semaphore);
 		fprintf(stdout, "The ms byte returned is %d\n", msByte);
 		fprintf(stdout, "The ls byte returned is %d\n", lsByte);
 		temp = (175.72 * (msByte * 256.0 + lsByte) / 65536.0) - 46.85;

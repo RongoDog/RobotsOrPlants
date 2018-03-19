@@ -1,1 +1,1 @@
-void *initialize_vision(void *arg);
+extern void *initialize_vision(void *arg);

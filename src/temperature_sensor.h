@@ -1,1 +1,1 @@
-void *initialize_temperature_sensor(void *arg);
+extern void *initialize_temperature_sensor(void *arg);
