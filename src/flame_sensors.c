@@ -149,9 +149,9 @@ int read_sensor(int handle, direction mux, sem_t *i2c_semaphore) {
 		return -1;
 	}
 	sem_post(i2c_semaphore);
-	fprintf(stdout, "The direct return value is %d\n", returnVal);
-	fprintf(stdout, "The conversion reg value is: [%x %x]\n", 
-		(int)(0xFF & returnVal), (int)(0xFF & (returnVal >> 8)));
+	//fprintf(stdout, "The direct return value is %d\n", returnVal);
+	//fprintf(stdout, "The conversion reg value is: [%x %x]\n", 
+	//	(int)(0xFF & returnVal), (int)(0xFF & (returnVal >> 8)));
 
 	return convert_to_integer(0xFF & (returnVal >> 8), 0xFF & returnVal);
 
@@ -164,7 +164,7 @@ void *initialize_flame_sensors(void *arg) {
 
 	// Set the default direction
 	current_direction.value = not_specified; 
-	
+
 	sem_wait(i2c_semaphore);
 	int handle = open_i2c_bus();
 	if (handle < 0) {
