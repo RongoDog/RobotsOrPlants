@@ -164,7 +164,7 @@ void *initialize_flame_sensors(void *arg) {
 
 	// Set the default direction
 	current_direction.value = not_specified; 
-
+	
 	sem_wait(i2c_semaphore);
 	int handle = open_i2c_bus();
 	if (handle < 0) {

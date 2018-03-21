@@ -27,7 +27,7 @@ typedef enum states_enum
     extinguish_flame = 5
 } states;
 
-states current_state;
+states current_state = searching;
 
 int start_message_queue()
 {
@@ -74,6 +74,7 @@ int main() {
     // The motors should be initially off, but their gpio set
     initialize_motors();
     current_state = searching;
+    
 
     // We start the message queue
     if (start_message_queue()) {
@@ -110,26 +111,32 @@ int main() {
         switch (received_data.type) {
             case temperature_data:
                 temp_data = received_data.value;
+                break;
             case flame_data:
                 switch (received_data.dir) {
                     case front:
                         flame_data_front = received_data.value;
+                        break;
                     case back:
                         flame_data_back = received_data.value;
+                        break;
                     case left:
                         flame_data_left = received_data.value;
+                        break;
                     case right:
                         flame_data_right = received_data.value;
+                        break;
                     default: 
                         continue;
                 }
+                break;
             case distance_data:
                 dist_data = received_data.value;
+                break;
             default:
                 continue;
         }
 
-        gpioDelay(MICRO_SEC_IN_SEC/2);
         fprintf(stdout, "Temperature: %f, Distance: %f\n", temp_data, dist_data);
         fprintf(stdout, "Flame_Front: %f, Flame_Back: %f, Flame_Left: %f, Flame_Right: %f\n",
                 flame_data_front, flame_data_back, flame_data_left, flame_data_right);
