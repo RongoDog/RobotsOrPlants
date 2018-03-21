@@ -2,7 +2,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
-#include <pinout_definitions.h>
+
+#define OUTPUT_PIN 23
+#define INPUT_PIN 24
+#define MICRO_SEC_IN_SEC 1000000
 
 #define USECOND_CENTIMETER_RATIO 58
 
@@ -29,11 +32,11 @@ void callback_function(int gpio, int level, unsigned int tick, void *t) {
 			return;
 		}
 		((time_tracker*)t)->current_distance = elapsed_time/USECOND_CENTIMETER_RATIO;
-		// Do something with output
+		fprintf(stdout, "The current distance %li\n", distance);
 	}
 }
 
-int initialize_vision() {
+int main() {
 	if (gpioInitialise() < 0) {
 		fprintf(stderr, "Failed to initialize GPIO interface");
 		exit(1);
@@ -43,10 +46,10 @@ int initialize_vision() {
 
 	struct time_tracker t = { .start = 0, .end = 0 };
 
-	gpioSetAlertFuncEx(ULTRA_SONIC_INPUT_PIN, callback_function, &t);
+	gpioSetAlertFuncEx(INPUT_PIN, callback_function, &t);
 	// This is the main while loop
 	while(1) { 
-		gpioTrigger(ULTRA_SONIC_OUTPUT_PIN, 10, 1);
+		gpioTrigger(OUTPUT_PIN, 10, 1);
 		gpioDelay(MICRO_SEC_IN_SEC/2);
 	}
 }

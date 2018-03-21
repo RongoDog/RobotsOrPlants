@@ -10,12 +10,12 @@
 #include <sys/msg.h>
 
 static int message_queue_id = -1; 
-static int temp_data;
-static int dist_data;
-static int flame_data_front;
-static int flame_data_back;
-static int flame_data_left;
-static int flame_data_right;
+static double temp_data = 0;
+static double dist_data = 0;
+static double flame_data_front = 0;
+static double flame_data_back = 0;
+static double flame_data_left = 0;
+static double flame_data_right = 0;
 
 typedef enum states_enum
 {
@@ -128,6 +128,11 @@ int main() {
             default:
                 continue;
         }
+
+        gpioDelay(MICRO_SEC_IN_SEC/2);
+        fprintf(stdout, "Temperature: %f, Distance: %f\n", temp_data, dist_data);
+        fprintf(stdout, "Flame_Front: %f, Flame_Back: %f, Flame_Left: %f, Flame_Right: %f\n",
+                flame_data_front, flame_data_back, flame_data_left, flame_data_right);
 
         // Interpret
     }

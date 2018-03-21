@@ -95,4 +95,5 @@ void initialize_motors() {
 	gpioSetMode(OUTPUT_PIN_A_PUMP, PI_OUTPUT); 
 	gpioSetMode(OUTPUT_PIN_B_PUMP, PI_OUTPUT); 
 	motors_off();
+	pump_off();
 }

@@ -60,6 +60,5 @@ void *initialize_vision(void *arg) {
 	// This is the main while loop
 	while(1) { 
 		gpioTrigger(ULTRA_SONIC_OUTPUT_PIN, 10, 1);
-		gpioDelay(MICRO_SEC_IN_SEC/2);
 	}
 }
