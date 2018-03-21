@@ -73,9 +73,9 @@ int main() {
     
     // The motors should be initially off, but their gpio set
     initialize_motors();
+
     current_state = searching;
     
-
     // We start the message queue
     if (start_message_queue()) {
         fprintf(stderr, "Failed to start message queue\n");
