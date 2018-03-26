@@ -8,6 +8,7 @@
 #include <pigpio.h>
 #include <semaphore.h>
 #include <sys/msg.h>
+#include <unistd.h>
 
 static int message_queue_id = -1; 
 static double temp_data = 0;
@@ -140,8 +141,9 @@ int main() {
         fprintf(stdout, "Temperature: %f, Distance: %f\n", temp_data, dist_data);
         fprintf(stdout, "Flame_Front: %f, Flame_Back: %f, Flame_Left: %f, Flame_Right: %f\n",
                 flame_data_front, flame_data_back, flame_data_left, flame_data_right);
-
+        sleep(0.5);
         // Interpret
+
     }
 
     void** exit_status; 
