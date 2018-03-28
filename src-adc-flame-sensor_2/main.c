@@ -27,6 +27,10 @@
 #define CONFIG_COMP_QUE_DISABLE 0x0003
 
 #define SINGLE_SHOT_READ_A0 0x83C3
+#define SINGLE_SHOT_READ_A1 0x83D3
+#define SINGLE_SHOT_READ_A2 0x83E3
+#define SINGLE_SHOT_READ_A3 0x83F3
+
 
 void handleWriteError(int returnVal) {
 	if (returnVal == PI_BAD_HANDLE) {
@@ -107,8 +111,25 @@ int read_sensor(int handle, int mux) {
 	}
 	fprintf(stdout, "TEST -- Successfully wrote to configuration register\n");
 	*/
+
+	int returnVal;
+	switch(mux) {
+		case 0: 
+			returnVal = i2cWriteWordData(handle, POINTER_CONFIG, SINGLE_SHOT_READ_A0);
+			break;
+		case 1: 
+			returnVal = i2cWriteWordData(handle, POINTER_CONFIG, SINGLE_SHOT_READ_A1);
+			break;
+		case 2: 
+			returnVal = i2cWriteWordData(handle, POINTER_CONFIG, SINGLE_SHOT_READ_A2);
+			break;
+		case 3: 
+			returnVal = i2cWriteWordData(handle, POINTER_CONFIG, SINGLE_SHOT_READ_A3);
+			break;
+		default: 
+			returnVal = i2cWriteWordData(handle, POINTER_CONFIG, SINGLE_SHOT_READ_A0);
+	}
 	// We write the configuration to the ADC
-	int returnVal = i2cWriteWordData(handle, POINTER_CONFIG, SINGLE_SHOT_READ_A0);
 	if (returnVal < 0) {
 		handleWriteError(returnVal);
 		fprintf(stderr, "Failed to write to configuration register\n");
@@ -151,10 +172,12 @@ int main() {
 	fprintf(stdout, "The configuration register value is now %x\n", returnVal);
 
 	// This is the main while loop
+	int count = 0;
 	while(1) { 
 		sleep(1);
-		int converted_value = read_sensor(handle, 0);
-		fprintf(stdout, "The converted value is %d\n", converted_value);
+		int converted_value = read_sensor(handle, count);
+		fprintf(stdout, "The converted value is %d for %d\n", converted_value, count);
+		count = (count + 1)%4;
 	}
 	exit(0);
 

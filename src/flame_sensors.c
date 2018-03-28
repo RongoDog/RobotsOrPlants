@@ -113,26 +113,25 @@ int convert_to_integer(int low_bit, int high_bit) {
 // ADS1015 ADC and then reads the conversion value. 
 int read_sensor(int handle, direction mux, sem_t *i2c_semaphore) {
 	
-	int16_t config_value;
+	int returnVal;
+	sem_wait(i2c_semaphore);
 	switch(mux) {
 		case front: 
-			config_value = SINGLE_SHOT_READ_A0;
+			returnVal = i2cWriteWordData(handle, POINTER_CONFIG, SINGLE_SHOT_READ_A0);
 			break;
 		case left: 
-			config_value = SINGLE_SHOT_READ_A1;
+			returnVal = i2cWriteWordData(handle, POINTER_CONFIG, SINGLE_SHOT_READ_A1);
 			break;
 		case right: 
-			config_value = SINGLE_SHOT_READ_A2;
+			returnVal = i2cWriteWordData(handle, POINTER_CONFIG, SINGLE_SHOT_READ_A2);
 			break;
 		case back: 
-			config_value = SINGLE_SHOT_READ_A3;
+			returnVal = i2cWriteWordData(handle, POINTER_CONFIG, SINGLE_SHOT_READ_A3);
 			break;
 		default: 
-			config_value = SINGLE_SHOT_READ_A0;
+			returnVal = i2cWriteWordData(handle, POINTER_CONFIG, SINGLE_SHOT_READ_A0);
 	}
 
-	sem_wait(i2c_semaphore);
-	int returnVal = i2cWriteWordData(handle, POINTER_CONFIG, config_value);
 	if (returnVal < 0) {
 		handleWriteError(returnVal);
 		fprintf(stderr, "Failed to write to configuration register\n");

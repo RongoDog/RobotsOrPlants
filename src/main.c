@@ -99,7 +99,7 @@ int main() {
     
     // Create the required threads
     pthread_create(&flame_sensor_thread, NULL, initialize_flame_sensors, (void *)info);
-    pthread_create(&temperature_sensor_thread, NULL, initialize_temperature_sensor, (void *)info);
+    //pthread_create(&temperature_sensor_thread, NULL, initialize_temperature_sensor, (void *)info);
     pthread_create(&ultra_sonic_sensor_thread, NULL, initialize_vision, (void *)info);
 
     struct sensor_data received_data;
@@ -109,6 +109,7 @@ int main() {
             fprintf(stderr, "Failed to receive sensor data\n");
             continue;
         }
+        printf("Received some data %f\n", received_data.value);
         switch (received_data.type) {
             case temperature_data:
                 temp_data = received_data.value;
@@ -141,7 +142,7 @@ int main() {
         fprintf(stdout, "Temperature: %f, Distance: %f\n", temp_data, dist_data);
         fprintf(stdout, "Flame_Front: %f, Flame_Back: %f, Flame_Left: %f, Flame_Right: %f\n",
                 flame_data_front, flame_data_back, flame_data_left, flame_data_right);
-        sleep(0.5);
+        sleep(1);
         // Interpret
 
     }
