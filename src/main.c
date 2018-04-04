@@ -10,6 +10,14 @@
 #include <sys/msg.h>
 #include <unistd.h>
 
+#define DISTANCE_THRESHOLD 40
+#define FLAME_LR_SAFETY_THRESHOLD 0.8
+#define FLAME_FRONT_SAFETY_THRESHOLD 0.8
+#define FLAME_BACK_SAFETY_THRESHOLD 0.8
+
+#define FLAME_ATTACK_THRESHOLD 0.9
+#define FLAME_DETECTION_THRESHOLD 1.5
+
 static int message_queue_id = -1; 
 static double temp_data = 0;
 static double dist_data = 0;
@@ -28,7 +36,19 @@ typedef enum states_enum
     extinguish_flame = 5
 } states;
 
+typedef enum pinpoint_states_enum
+{
+    stage_one = 0,
+    stage_two = 1,
+    stage_three = 2,
+    stage_four = 3
+} pinpoint_states;
+
+static double max_flame_found = 0;
+
+
 states current_state = searching;
+pinpoint_states currently_pinpointing = stage_one;
 
 int start_message_queue()
 {
@@ -63,6 +83,168 @@ void send_flame_control_data(direction dir)
     my_msg.msg_key = FLAME_SENSOR_CONTROL_MESSAGE;
 
     msgsnd(message_queue_id, (void *)&my_msg, sizeof(data), IPC_NOWAIT);
+}
+
+void searching_state() { 
+    if (dist_data < DISTANCE_THRESHOLD) {
+        current_state = redirect;
+    } else if (flame_data_front < FLAME_FRONT_SAFETY_THRESHOLD && \
+        flame_data_back < FLAME_BACK_SAFETY_THRESHOLD && \
+        flame_data_left < FLAME_LR_SAFETY_THRESHOLD && \
+        flame_data_right < FLAME_LR_SAFETY_THRESHOLD) {
+        current_state = safety;
+    } else if (flame_data_front < FLAME_DETECTION_THRESHOLD && \
+        flame_data_back < FLAME_DETECTION_THRESHOLD && \
+        flame_data_left < FLAME_DETECTION_THRESHOLD && \
+        flame_data_right < FLAME_DETECTION_THRESHOLD) {
+        current_state = pinpointing;
+        if (flame_data_front < FLAME_DETECTION_THRESHOLD) {
+            currently_pinpointing = stage_two;
+        } else {
+            currently_pinpointing = stage_one;
+        }
+    }
+    return;
+}
+
+void safety_state() {
+    if (flame_data_front > FLAME_FRONT_SAFETY_THRESHOLD && \
+        flame_data_back > FLAME_BACK_SAFETY_THRESHOLD && \
+        flame_data_left > FLAME_LR_SAFETY_THRESHOLD && \
+        flame_data_right > FLAME_LR_SAFETY_THRESHOLD) {
+        current_state = searching;
+    }
+    return;
+}
+
+void pinpointing_state() {
+    switch(currently_pinpointing) {
+        case stage_one:
+            if (flame_data_front < FLAME_DETECTION_THRESHOLD) {
+                currently_pinpointing = stage_two;
+            }
+            break;
+        case stage_two:
+            if (flame_data_front < max_flame_found) {
+                max_flame_found = flame_data_front;
+            }
+            if (flame_data_front > FLAME_DETECTION_THRESHOLD) {
+                currently_pinpointing = stage_three;
+            }
+            break;
+        case stage_three:
+            if (flame_data_front < max_flame_found) {
+                max_flame_found = flame_data_front;
+            }
+            if (flame_data_front > FLAME_DETECTION_THRESHOLD) {
+                currently_pinpointing = stage_four;
+            }
+            break;
+        case stage_four:
+            if (((flame_data_front - max_flame_found)/FLAME_DETECTION_THRESHOLD) < 0.1) {
+                max_flame_found = 0;
+                current_state = attack_flame;
+            }
+            break;
+        default:
+            break;
+    }
+}
+
+void redirect_state() {
+    if (dist_data > DISTANCE_THRESHOLD) {
+        current_state = searching;
+    }
+    return;
+}
+
+void attack_flame_state() {
+    if (flame_data_front < FLAME_ATTACK_THRESHOLD) {
+        current_state = extinguish_flame;
+    }
+}
+
+void extinguish_flame_state() {
+    if (flame_data_front > FLAME_DETECTION_THRESHOLD) {
+        current_state = searching;
+    }
+}
+
+void analyze_state() {
+    switch(current_state) {
+        case searching:
+            searching_state();
+            break;
+        case safety:
+            safety_state();
+            break;
+        case pinpointing:
+            pinpointing_state();
+            break;
+        case redirect:
+            redirect_state();
+            break;
+        case attack_flame:
+            attack_flame_state();
+            break;
+        case extinguish_flame:
+            extinguish_flame_state();
+            break;
+        default:
+            current_state = searching;
+    }
+}
+
+void execute_state() {
+    switch(current_state) {
+        case searching:
+            pump_off();
+            drive_forward();
+            break;
+        case safety:
+            pump_off();
+            if (flame_data_front < FLAME_FRONT_SAFETY_THRESHOLD) {
+                drive_backward();
+            } else {
+                drive_forward();
+            }
+            break;
+        case pinpointing:
+            pump_off();
+            switch(currently_pinpointing) {
+                case stage_one:
+                    sharp_right();
+                    break;
+                case stage_two:
+                    sharp_right();
+                    break;
+                case stage_three:
+                    sharp_left();
+                    break;
+                case stage_four:
+                    sharp_right();
+                    break;
+                default:
+                    sharp_right();
+                    break;
+            }
+            break;
+        case redirect:
+            pump_off();
+            sharp_left();
+            break;
+        case attack_flame:
+            pump_off();
+            drive_forward();
+            break;
+        case extinguish_flame:
+            motors_off();
+            //pump_on(); Remove comment when required
+            break;
+        default:
+            pump_off();
+            break;
+    }
 }
 
 int main() {
@@ -139,10 +321,16 @@ int main() {
                 continue;
         }
 
+
+        /*
         fprintf(stdout, "Temperature: %f, Distance: %f\n", temp_data, dist_data);
         fprintf(stdout, "Flame_Front: %f, Flame_Back: %f, Flame_Left: %f, Flame_Right: %f\n",
                 flame_data_front, flame_data_back, flame_data_left, flame_data_right);
-        sleep(1);
+        */
+
+        analyze_state();
+        execute_state();
+        //sleep(1);
         // Interpret
 
     }
