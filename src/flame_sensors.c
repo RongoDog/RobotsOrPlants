@@ -6,6 +6,7 @@
 #include <sys/msg.h>
 #include <unistd.h>
 #include <math.h>
+#include "motor_controller.h"
 #include "flame_sensors.h"
 #include "pinout_definitions.h"
 
@@ -179,6 +180,10 @@ void *initialize_flame_sensors(void *arg) {
 		converted_value = read_sensor(handle, next_direction, i2c_semaphore);
 		receive_control_data(&current_direction);
 		send_flame_data((int)converted_value, next_direction);
+		// Manual motor override to avoid timing issue
+		if ((next_direction == front) && (converted_value < 1500)) {
+			motors_off();
+		}
 		if (current_direction.value == not_specified) {
 			next_direction = ((int)next_direction + 1)%4; 
 		} else {

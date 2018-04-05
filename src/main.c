@@ -13,8 +13,9 @@
 #include <time.h>
 #include <stdint.h>
 #include <inttypes.h>
+#include <sys/time.h>
 
-#define DISTANCE_THRESHOLD 30
+#define DISTANCE_THRESHOLD 40
 #define FLAME_LR_SAFETY_THRESHOLD 300
 #define FLAME_FRONT_SAFETY_THRESHOLD 300
 #define FLAME_BACK_SAFETY_THRESHOLD 900
@@ -22,17 +23,17 @@
 #define FLAME_DETECTION_THRESHOLD 1500
 
 static int message_queue_id = -1; 
-static double temp_data = 0;
-static double dist_data = 0;
+static int temp_data = 0;
+static int dist_data = 0;
 // Initialize to absurdly high value
-static double flame_data_front = 10000;
-static double flame_data_back = 10000;
-static double flame_data_left = 10000;
-static double flame_data_right = 10000;
+static int flame_data_front = 10000;
+static int flame_data_back = 10000;
+static int flame_data_left = 10000;
+static int flame_data_right = 10000;
 
-static int64_t pinpoint_start_time; 
+static unsigned long pinpoint_start_time; 
 
-static int64_t extinguish_start_time;
+static unsigned long extinguish_start_time;
 static int extinguish_dir = 0;
 
 typedef enum states_enum
@@ -47,16 +48,16 @@ typedef enum states_enum
 
 typedef enum pinpoint_states_enum
 {
-    left = 0,
-    right = 1,
-    back = 2
+    left_pinpoint = 0,
+    right_pinpoint = 1,
+    back_pinpoint = 2
 } pinpoint_states;
 
 static double max_flame_found = 0;
 
 
 states current_state = searching;
-pinpoint_states currently_pinpointing = unspecified;
+pinpoint_states currently_pinpointing;
 
 int start_message_queue()
 {
@@ -94,18 +95,12 @@ void send_flame_control_data(direction dir)
     msgsnd(message_queue_id, (void *)&my_msg, sizeof(data), IPC_NOWAIT);
 }
 
-int64_t get_current_time_micros() {
-    if (clock_gettime(CLOCK_REALTIME,&tms)) {
-            return -1;
-    }
-    struct timespec tms;
-    int64_t micros = tms.tv_sec * 1000000;
-    micros += tms.tv_nsec/1000;
-    return micros;
+unsigned long get_current_time() {
+    return (unsigned long)time(NULL);
 }
 
 void searching_state() { 
-    //send_flame_control_data(not_specified);
+    send_flame_control_data(not_specified);
     if (dist_data < DISTANCE_THRESHOLD) {
         current_state = redirect;
     } else if (flame_data_front < FLAME_DETECTION_THRESHOLD || \
@@ -113,23 +108,20 @@ void searching_state() {
         flame_data_left < FLAME_DETECTION_THRESHOLD || \
         flame_data_right < FLAME_DETECTION_THRESHOLD) {
         send_flame_control_data(front);
-        pinpoint_start_time = get_current_time_micros();
-        if (pinpoint_start_time < 0) {
-            fprintf(stderr, "Failed to get current time\n");
-            return;
-        }
+        pinpoint_start_time = get_current_time();
+        printf("Pinpoint time: %d\n", pinpoint_start_time);
         if (flame_data_front < FLAME_DETECTION_THRESHOLD) {
             current_state = extinguish_flame;
-            extinguish_start_time = get_current_time_micros();
+            extinguish_start_time = get_current_time();
         } else if (flame_data_right < FLAME_DETECTION_THRESHOLD) {
             current_state = pinpointing;
-            currently_pinpointing = right;
+            currently_pinpointing = right_pinpoint;
         } else if (flame_data_back < FLAME_DETECTION_THRESHOLD) {
             current_state = pinpointing;
-            currently_pinpointing = back;
+            currently_pinpointing = back_pinpoint;
         } else if (flame_data_left < FLAME_DETECTION_THRESHOLD) {
             current_state = pinpointing;
-            currently_pinpointing = left;
+            currently_pinpointing = left_pinpoint;
         }
     }
     return;
@@ -150,7 +142,7 @@ void pinpointing_state() {
         current_state = extinguish_flame;
         return;
     }
-    if ((pinpoint_start_time + MICRO_SEC_IN_SEC*4) < get_current_time_micros()) {
+    if ((pinpoint_start_time + 4) < get_current_time()) {
         current_state = searching;
     }
 }
@@ -163,10 +155,8 @@ void redirect_state() {
 }
 
 void extinguish_flame_state() {
-    if (flame_data_front > FLAME_DETECTION_THRESHOLD || \
-        (extinguish_start_time + MICRO_SEC_IN_SEC*2) < get_current_time_micros()) {
+    if ((extinguish_start_time + 2) < get_current_time()) {
         current_state = searching;
-        send_flame_control_data(not_specified);
     }
 }
 
@@ -209,13 +199,13 @@ void execute_state() {
         case pinpointing:
             pump_off();
             switch(currently_pinpointing) {
-                case left:
-                    reverse_arc_right();
-                    break;
-                case right:
+                case left_pinpoint:
                     reverse_arc_left();
                     break;
-                case back:
+                case right_pinpoint:
+                    reverse_arc_right();
+                    break;
+                case back_pinpoint:
                     sharp_right();
                     break;
             }
@@ -225,6 +215,7 @@ void execute_state() {
             sharp_left();
             break;
         case extinguish_flame:
+            extinguish_dir = rand() & 1;
             if (extinguish_dir) {
                 sharp_left();
                 extinguish_dir = 0;
@@ -232,8 +223,7 @@ void execute_state() {
                 sharp_right();
                 extinguish_dir = 1;
             }
-            motors_off();
-            //pump_on(); Remove comment when required
+            pump_on(); 
             break;
         default:
             pump_off();
@@ -313,6 +303,7 @@ int main() {
             default:
                 continue;
         }
+        printf("Distance: %d, Front flame: %d, Back flame: %d, Left flame: %d, Right flame: %d\n", dist_data, flame_data_front, flame_data_back, flame_data_left, flame_data_right);
         // Determine next state
         analyze_state();
         // Execute on state
