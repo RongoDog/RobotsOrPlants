@@ -3,6 +3,7 @@
 #include <sys/msg.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <math.h>
 #include "pinout_definitions.h"
 #include "ultra_sonic_sensor.h"
 
@@ -18,7 +19,7 @@ typedef struct time_tracker {
 	long int end;
 } time_tracker;
 
-void send_distance_data(double distance)
+void send_distance_data(int distance)
 {
 	struct sensor_message my_msg;
 	struct sensor_data data;
@@ -28,7 +29,7 @@ void send_distance_data(double distance)
 
 	my_msg.data = data;
 	my_msg.msg_key = SENSOR_MESSAGE;
-	msgsnd(*message_queue_id, (void *)&my_msg, sizeof(data), IPC_NOWAIT);
+	msgsnd(*message_queue_id, (void *)&my_msg, sizeof(struct sensor_data), IPC_NOWAIT);
 }
 
 
@@ -39,14 +40,14 @@ void callback_function(int gpio, int level, unsigned int tick, void *t) {
 	} else if (level == 0) {
 		((time_tracker *)t)->end = tick;
 		long int elapsed_time = (((time_tracker *)t)->end)-(((time_tracker *)t)->start);
-		double distance = (double)elapsed_time/USECOND_CENTIMETER_RATIO;
+		double distance = (double)elapsed_time/USECOND_CENTIMETER_RATIO;	
 		gpioTrigger(ULTRA_SONIC_OUTPUT_PIN, 10, 1);
 		if (distance < MIN_RANGE_LENGTH || distance > MAX_RANGE_LENGTH) {
 			// We skip this reading since it is erronous either a loop in the tick
 			// counter or a hardware error. 
 			return;
 		}
-		send_distance_data(distance);
+		send_distance_data((int)distance);
 	}
 }
 

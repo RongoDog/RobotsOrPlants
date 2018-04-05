@@ -174,10 +174,10 @@ int main() {
 	// This is the main while loop
 	int count = 0;
 	while(1) { 
-		sleep(1);
 		int converted_value = read_sensor(handle, count);
 		fprintf(stdout, "The converted value is %d for %d\n", converted_value, count);
 		count = (count + 1)%4;
+		sleep(1);
 	}
 	exit(0);
 

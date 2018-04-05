@@ -28,10 +28,10 @@ struct thread_info {
 
 typedef enum direction_enum
 {
-	front = 0,
-	left = 1,
-	right = 2,
-	back = 3,
+	front = 1,
+	left = 0,
+	right = 3,
+	back = 2,
 	not_specified = 4
 } direction;
 
@@ -45,7 +45,7 @@ typedef enum data_type_enum
 struct sensor_data {
 	data_type type; 
 	direction dir; 
-	double value;
+	int value;
 };
 
 struct sensor_message {

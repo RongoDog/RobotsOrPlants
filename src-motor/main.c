@@ -108,16 +108,4 @@ int main() {
 	gpioSetMode(OUTPUT_PIN_B_LEFT, PI_OUTPUT); 
 	motors_off();
 	pump_off();
-	int current_dir = 1;
-	while(1) {
-		if (current_dir) {
-			current_dir = 0;
-			drive_forward();
-		} else {
-			current_dir = 1;
-			drive_backward();
-		}
-		gpioDelay(1000000);
-
-	}
 }

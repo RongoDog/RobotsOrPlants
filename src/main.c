@@ -9,22 +9,28 @@
 #include <semaphore.h>
 #include <sys/msg.h>
 #include <unistd.h>
+#include <math.h>
+#include <time.h>
+#include <stdint.h>
+#include <inttypes.h>
 
-#define DISTANCE_THRESHOLD 40
-#define FLAME_LR_SAFETY_THRESHOLD 0.8
-#define FLAME_FRONT_SAFETY_THRESHOLD 0.8
-#define FLAME_BACK_SAFETY_THRESHOLD 0.8
+#define DISTANCE_THRESHOLD 30
+#define FLAME_LR_SAFETY_THRESHOLD 300
+#define FLAME_FRONT_SAFETY_THRESHOLD 300
+#define FLAME_BACK_SAFETY_THRESHOLD 900
 
-#define FLAME_ATTACK_THRESHOLD 0.9
-#define FLAME_DETECTION_THRESHOLD 1.5
+#define FLAME_DETECTION_THRESHOLD 1500
 
 static int message_queue_id = -1; 
 static double temp_data = 0;
 static double dist_data = 0;
-static double flame_data_front = 0;
-static double flame_data_back = 0;
-static double flame_data_left = 0;
-static double flame_data_right = 0;
+// Initialize to absurdly high value
+static double flame_data_front = 10000;
+static double flame_data_back = 10000;
+static double flame_data_left = 10000;
+static double flame_data_right = 10000;
+
+static int64_t pinpoint_start_time; 
 
 typedef enum states_enum
 {
@@ -38,17 +44,16 @@ typedef enum states_enum
 
 typedef enum pinpoint_states_enum
 {
-    stage_one = 0,
-    stage_two = 1,
-    stage_three = 2,
-    stage_four = 3
+    left = 0,
+    right = 1,
+    back = 2
 } pinpoint_states;
 
 static double max_flame_found = 0;
 
 
 states current_state = searching;
-pinpoint_states currently_pinpointing = stage_one;
+pinpoint_states currently_pinpointing = unspecified;
 
 int start_message_queue()
 {
@@ -66,10 +71,11 @@ void end_message_queue()
 int receive_sensor_message(struct sensor_data *data_to_read)
 {
     struct sensor_message my_msg;
-    if (msgrcv(message_queue_id, (void *)&my_msg, sizeof(*data_to_read), SENSOR_MESSAGE, 0) == -1) {
+    if (msgrcv(message_queue_id, (void *)&my_msg, sizeof(struct sensor_data), SENSOR_MESSAGE, 0) == -1) {
         return(-1);
     }
     *data_to_read = my_msg.data;
+
     return(0);
 }
 
@@ -85,23 +91,41 @@ void send_flame_control_data(direction dir)
     msgsnd(message_queue_id, (void *)&my_msg, sizeof(data), IPC_NOWAIT);
 }
 
+int64_t get_current_time_micros() {
+    if (clock_gettime(CLOCK_REALTIME,&tms)) {
+            return -1;
+    }
+    struct timespec tms;
+    int64_t micros = tms.tv_sec * 1000000;
+    micros += tms.tv_nsec/1000;
+    return micros;
+}
+
 void searching_state() { 
+    //send_flame_control_data(not_specified);
     if (dist_data < DISTANCE_THRESHOLD) {
         current_state = redirect;
-    } else if (flame_data_front < FLAME_FRONT_SAFETY_THRESHOLD && \
-        flame_data_back < FLAME_BACK_SAFETY_THRESHOLD && \
-        flame_data_left < FLAME_LR_SAFETY_THRESHOLD && \
-        flame_data_right < FLAME_LR_SAFETY_THRESHOLD) {
-        current_state = safety;
-    } else if (flame_data_front < FLAME_DETECTION_THRESHOLD && \
-        flame_data_back < FLAME_DETECTION_THRESHOLD && \
-        flame_data_left < FLAME_DETECTION_THRESHOLD && \
+    } else if (flame_data_front < FLAME_DETECTION_THRESHOLD || \
+        flame_data_back < FLAME_DETECTION_THRESHOLD || \
+        flame_data_left < FLAME_DETECTION_THRESHOLD || \
         flame_data_right < FLAME_DETECTION_THRESHOLD) {
-        current_state = pinpointing;
+        send_flame_control_data(front);
+        pinpoint_start_time = get_current_time_micros();
+        if (pinpoint_start_time < 0) {
+            fprintf(stderr, "Failed to get current time\n");
+            return;
+        }
         if (flame_data_front < FLAME_DETECTION_THRESHOLD) {
-            currently_pinpointing = stage_two;
-        } else {
-            currently_pinpointing = stage_one;
+            current_state = extinguish_flame;
+        } else if (flame_data_right < FLAME_DETECTION_THRESHOLD) {
+            current_state = pinpointing;
+            currently_pinpointing = right;
+        } else if (flame_data_back < FLAME_DETECTION_THRESHOLD) {
+            current_state = pinpointing;
+            currently_pinpointing = back;
+        } else if (flame_data_left < FLAME_DETECTION_THRESHOLD) {
+            current_state = pinpointing;
+            currently_pinpointing = left;
         }
     }
     return;
@@ -118,36 +142,12 @@ void safety_state() {
 }
 
 void pinpointing_state() {
-    switch(currently_pinpointing) {
-        case stage_one:
-            if (flame_data_front < FLAME_DETECTION_THRESHOLD) {
-                currently_pinpointing = stage_two;
-            }
-            break;
-        case stage_two:
-            if (flame_data_front < max_flame_found) {
-                max_flame_found = flame_data_front;
-            }
-            if (flame_data_front > FLAME_DETECTION_THRESHOLD) {
-                currently_pinpointing = stage_three;
-            }
-            break;
-        case stage_three:
-            if (flame_data_front < max_flame_found) {
-                max_flame_found = flame_data_front;
-            }
-            if (flame_data_front > FLAME_DETECTION_THRESHOLD) {
-                currently_pinpointing = stage_four;
-            }
-            break;
-        case stage_four:
-            if (((flame_data_front - max_flame_found)/FLAME_DETECTION_THRESHOLD) < 0.1) {
-                max_flame_found = 0;
-                current_state = attack_flame;
-            }
-            break;
-        default:
-            break;
+    if (flame_data_front < FLAME_DETECTION_THRESHOLD) {
+        current_state = extinguish_flame;
+        return;
+    }
+    if ((pinpoint_start_time + MICRO_SEC_IN_SEC*4) < get_current_time_micros()) {
+        current_state = searching;
     }
 }
 
@@ -158,15 +158,10 @@ void redirect_state() {
     return;
 }
 
-void attack_flame_state() {
-    if (flame_data_front < FLAME_ATTACK_THRESHOLD) {
-        current_state = extinguish_flame;
-    }
-}
-
 void extinguish_flame_state() {
     if (flame_data_front > FLAME_DETECTION_THRESHOLD) {
         current_state = searching;
+        send_flame_control_data(not_specified);
     }
 }
 
@@ -183,9 +178,6 @@ void analyze_state() {
             break;
         case redirect:
             redirect_state();
-            break;
-        case attack_flame:
-            attack_flame_state();
             break;
         case extinguish_flame:
             extinguish_flame_state();
@@ -212,19 +204,13 @@ void execute_state() {
         case pinpointing:
             pump_off();
             switch(currently_pinpointing) {
-                case stage_one:
-                    sharp_right();
+                case left:
+                    reverse_arc_right();
                     break;
-                case stage_two:
-                    sharp_right();
+                case right:
+                    reverse_arc_left();
                     break;
-                case stage_three:
-                    sharp_left();
-                    break;
-                case stage_four:
-                    sharp_right();
-                    break;
-                default:
+                case back:
                     sharp_right();
                     break;
             }
@@ -232,10 +218,6 @@ void execute_state() {
         case redirect:
             pump_off();
             sharp_left();
-            break;
-        case attack_flame:
-            pump_off();
-            drive_forward();
             break;
         case extinguish_flame:
             motors_off();
@@ -271,7 +253,7 @@ int main() {
     
     // We need threads for all our sensors
     pthread_t flame_sensor_thread;
-    pthread_t temperature_sensor_thread;
+    //pthread_t temperature_sensor_thread;
     pthread_t ultra_sonic_sensor_thread;
 
     // We create the thread info structure
@@ -291,7 +273,6 @@ int main() {
             fprintf(stderr, "Failed to receive sensor data\n");
             continue;
         }
-        printf("Received some data %f\n", received_data.value);
         switch (received_data.type) {
             case temperature_data:
                 temp_data = received_data.value;
@@ -321,23 +302,20 @@ int main() {
                 continue;
         }
 
-
-        /*
         fprintf(stdout, "Temperature: %f, Distance: %f\n", temp_data, dist_data);
         fprintf(stdout, "Flame_Front: %f, Flame_Back: %f, Flame_Left: %f, Flame_Right: %f\n",
                 flame_data_front, flame_data_back, flame_data_left, flame_data_right);
-        */
 
+        // Determine next state
         analyze_state();
+        // Execute on state
         execute_state();
-        //sleep(1);
-        // Interpret
 
     }
 
     void** exit_status; 
     pthread_join(flame_sensor_thread, exit_status);
-    pthread_join(temperature_sensor_thread, exit_status);
+    //pthread_join(temperature_sensor_thread, exit_status);
     pthread_join(ultra_sonic_sensor_thread, exit_status);
 
     exit(0);

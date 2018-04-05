@@ -4,6 +4,8 @@
 #include <sys/types.h>
 #include <semaphore.h>
 #include <sys/msg.h>
+#include <unistd.h>
+#include <math.h>
 #include "flame_sensors.h"
 #include "pinout_definitions.h"
 
@@ -37,7 +39,7 @@ sem_t *i2c_semaphore;
 int *message_queue_id;
 struct direction_data current_direction;
 
-void send_flame_data(double sensor_value, direction dir)
+void send_flame_data(int sensor_value, direction dir)
 {
 	struct sensor_message my_msg;
 	struct sensor_data data;
@@ -47,7 +49,7 @@ void send_flame_data(double sensor_value, direction dir)
 
 	my_msg.data = data;
 	my_msg.msg_key = SENSOR_MESSAGE;
-	msgsnd(*message_queue_id, (void *)&my_msg, sizeof(data), IPC_NOWAIT);
+	msgsnd(*message_queue_id, (void *)&my_msg, sizeof(struct sensor_data), IPC_NOWAIT);
 }
 
 int receive_control_data(struct direction_data *dir)
@@ -117,16 +119,16 @@ int read_sensor(int handle, direction mux, sem_t *i2c_semaphore) {
 	sem_wait(i2c_semaphore);
 	switch(mux) {
 		case front: 
-			returnVal = i2cWriteWordData(handle, POINTER_CONFIG, SINGLE_SHOT_READ_A0);
-			break;
-		case left: 
 			returnVal = i2cWriteWordData(handle, POINTER_CONFIG, SINGLE_SHOT_READ_A1);
 			break;
+		case left: 
+			returnVal = i2cWriteWordData(handle, POINTER_CONFIG, SINGLE_SHOT_READ_A0);
+			break;
 		case right: 
-			returnVal = i2cWriteWordData(handle, POINTER_CONFIG, SINGLE_SHOT_READ_A2);
+			returnVal = i2cWriteWordData(handle, POINTER_CONFIG, SINGLE_SHOT_READ_A3);
 			break;
 		case back: 
-			returnVal = i2cWriteWordData(handle, POINTER_CONFIG, SINGLE_SHOT_READ_A3);
+			returnVal = i2cWriteWordData(handle, POINTER_CONFIG, SINGLE_SHOT_READ_A2);
 			break;
 		default: 
 			returnVal = i2cWriteWordData(handle, POINTER_CONFIG, SINGLE_SHOT_READ_A0);
@@ -138,7 +140,7 @@ int read_sensor(int handle, direction mux, sem_t *i2c_semaphore) {
 		return -1;
 	}
 	sem_post(i2c_semaphore);
-	gpioDelay(MICRO_SEC_IN_SEC/DATA_RATE + MICRO_SEC_IN_SEC/100);
+	gpioDelay(MICRO_SEC_IN_SEC/10);
 	sem_wait(i2c_semaphore);
 	returnVal = i2cReadWordData(handle, POINTER_CONVERSION);
 	if (returnVal < 0) {
@@ -172,11 +174,11 @@ void *initialize_flame_sensors(void *arg) {
 	
 	// This is the main while loop
 	int converted_value;
-	int next_direction = front; 
+	int next_direction = 0; 
 	while(1) { 
 		converted_value = read_sensor(handle, next_direction, i2c_semaphore);
-		send_flame_data(converted_value, next_direction);
 		receive_control_data(&current_direction);
+		send_flame_data((int)converted_value, next_direction);
 		if (current_direction.value == not_specified) {
 			next_direction = ((int)next_direction + 1)%4; 
 		} else {

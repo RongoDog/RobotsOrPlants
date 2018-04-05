@@ -4,13 +4,14 @@
 #include <sys/types.h>
 #include <semaphore.h>
 #include <sys/msg.h>
+#include <math.h>
 #include "temperature_sensor.h"
 #include "pinout_definitions.h"
 
 sem_t *i2c_semaphore;
 int *message_queue_id;
 
-void send_temperature_data(double temperature)
+void send_temperature_data(int temperature)
 {
 	struct sensor_message my_msg;
 	struct sensor_data data;
@@ -73,6 +74,6 @@ void *initialize_temperature_sensor(void *arg) {
 		}
 		sem_post(i2c_semaphore);
 		temp = (175.72 * (msByte * 256.0 + lsByte) / 65536.0) - 46.85;
-		send_temperature_data(temp);
+		send_temperature_data((int)temp);
 	}
 }
