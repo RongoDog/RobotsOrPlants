@@ -32,6 +32,9 @@ static double flame_data_right = 10000;
 
 static int64_t pinpoint_start_time; 
 
+static int64_t extinguish_start_time;
+static int extinguish_dir = 0;
+
 typedef enum states_enum
 {
     searching = 0,
@@ -117,6 +120,7 @@ void searching_state() {
         }
         if (flame_data_front < FLAME_DETECTION_THRESHOLD) {
             current_state = extinguish_flame;
+            extinguish_start_time = get_current_time_micros();
         } else if (flame_data_right < FLAME_DETECTION_THRESHOLD) {
             current_state = pinpointing;
             currently_pinpointing = right;
@@ -159,7 +163,8 @@ void redirect_state() {
 }
 
 void extinguish_flame_state() {
-    if (flame_data_front > FLAME_DETECTION_THRESHOLD) {
+    if (flame_data_front > FLAME_DETECTION_THRESHOLD || \
+        (extinguish_start_time + MICRO_SEC_IN_SEC*2) < get_current_time_micros()) {
         current_state = searching;
         send_flame_control_data(not_specified);
     }
@@ -220,6 +225,13 @@ void execute_state() {
             sharp_left();
             break;
         case extinguish_flame:
+            if (extinguish_dir) {
+                sharp_left();
+                extinguish_dir = 0;
+            } else {
+                sharp_right();
+                extinguish_dir = 1;
+            }
             motors_off();
             //pump_on(); Remove comment when required
             break;
@@ -301,11 +313,6 @@ int main() {
             default:
                 continue;
         }
-
-        fprintf(stdout, "Temperature: %f, Distance: %f\n", temp_data, dist_data);
-        fprintf(stdout, "Flame_Front: %f, Flame_Back: %f, Flame_Left: %f, Flame_Right: %f\n",
-                flame_data_front, flame_data_back, flame_data_left, flame_data_right);
-
         // Determine next state
         analyze_state();
         // Execute on state
