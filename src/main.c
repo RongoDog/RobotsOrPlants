@@ -21,10 +21,15 @@
 #define FLAME_BACK_SAFETY_THRESHOLD 900
 
 #define FLAME_DETECTION_THRESHOLD 1500
+#define FLAME_ATTACK_THRESHOLD 700
+
+#define PINPOINT_TIMOUT 5
+#define EXINGUISH_TIMOUT 3
 
 static int message_queue_id = -1; 
 static int temp_data = 0;
 static int dist_data = 0;
+static int redirect_direction = 0;
 // Initialize to absurdly high value
 static int flame_data_front = 10000;
 static int flame_data_back = 10000;
@@ -50,10 +55,13 @@ typedef enum pinpoint_states_enum
 {
     left_pinpoint = 0,
     right_pinpoint = 1,
-    back_pinpoint = 2
+    back_pinpoint = 2,
+    right_sweep = 3,
+    left_sweep = 4,
+    final = 5
 } pinpoint_states;
 
-static double max_flame_found = 0;
+static int max_flame_found = 0;
 
 
 states current_state = searching;
@@ -100,27 +108,36 @@ unsigned long get_current_time() {
 }
 
 void searching_state() { 
-    send_flame_control_data(not_specified);
+    // Don't hit a wall
     if (dist_data < DISTANCE_THRESHOLD) {
         current_state = redirect;
+        // We want to redirect in an arbitrary direction
+        redirect_direction = 1;
+    // If any sensors catches a flame, we want to pinpoint it
     } else if (flame_data_front < FLAME_DETECTION_THRESHOLD || \
         flame_data_back < FLAME_DETECTION_THRESHOLD || \
         flame_data_left < FLAME_DETECTION_THRESHOLD || \
         flame_data_right < FLAME_DETECTION_THRESHOLD) {
+        // To begin the pinpointing state,
+        // we focus control on the front sensor and
+        // initialize the max flame fount to 0
         send_flame_control_data(front);
         pinpoint_start_time = get_current_time();
-        printf("Pinpoint time: %d\n", pinpoint_start_time);
+        max_flame_found = 0;
+        current_state = pinpointing;
+        // If the front catches the flame, we skip a few states
+        // in the pinpointing, otherwise, we engage the appropriate
+        // initial action
         if (flame_data_front < FLAME_DETECTION_THRESHOLD) {
-            current_state = extinguish_flame;
-            extinguish_start_time = get_current_time();
+            currently_pinpointing = right_sweep;
         } else if (flame_data_right < FLAME_DETECTION_THRESHOLD) {
-            current_state = pinpointing;
+            flame_data_right = 10000;
             currently_pinpointing = right_pinpoint;
         } else if (flame_data_back < FLAME_DETECTION_THRESHOLD) {
-            current_state = pinpointing;
+            flame_data_back = 10000;
             currently_pinpointing = back_pinpoint;
         } else if (flame_data_left < FLAME_DETECTION_THRESHOLD) {
-            current_state = pinpointing;
+            flame_data_left = 10000;
             currently_pinpointing = left_pinpoint;
         }
     }
@@ -138,16 +155,74 @@ void safety_state() {
 }
 
 void pinpointing_state() {
-    if (flame_data_front < FLAME_DETECTION_THRESHOLD) {
-        current_state = extinguish_flame;
-        return;
+    // Always update the max flame found
+    if (max_flame_found > flame_data_front) {
+        max_flame_found = flame_data_front;
     }
-    if ((pinpoint_start_time + 4) < get_current_time()) {
+    switch(currently_pinpointing) {
+        // We right sweep the whole detection range of the front sensor
+        case right_sweep:
+            if (flame_data_front > FLAME_DETECTION_THRESHOLD) {
+                currently_pinpointing = left_sweep;
+                return;
+            } else if (flame_data_front < FLAME_ATTACK_THRESHOLD) {
+                // Switch to the extinguish state
+                current_state = extinguish_flame;
+                extinguish_start_time = get_current_time();
+                return;
+            }
+            break;
+        // We left sweep the whole detection range of the left sensor
+        case left_sweep:
+            if (flame_data_front > FLAME_DETECTION_THRESHOLD) {
+                current_state = searching;
+                // Ensure that the flame sensor module is capturing
+                // in all directions
+                send_flame_control_data(not_specified);
+                return;
+            } else if (flame_data_front < FLAME_ATTACK_THRESHOLD) {
+                // Switch to the extinguish state
+                current_state = extinguish_flame;
+                extinguish_start_time = get_current_time();
+                return;
+            }
+            break;
+        /*
+        // At this stage the maximum flame value is likely found
+        // We shoot when ready
+        case final:
+            // Within a 10% margin of the max, we shoot
+            if (flame_data_front < FLAME_ATTACK_THRESHOLD) {
+                // We need to cleanup
+                max_flame_found = 0;
+                // Switch to the extinguish state
+                current_state = extinguish_flame;
+                extinguish_start_time = get_current_time();
+                return;
+            }
+            break;
+        */
+        // Represents the initial search
+        default:
+            if (flame_data_front < FLAME_ATTACK_THRESHOLD) {
+                // Switch to the extinguish state
+                current_state = extinguish_flame;
+                extinguish_start_time = get_current_time();
+                return;
+            }
+            break;
+    }
+    // Lost flames are ignored after 6 seconds. 
+    if ((pinpoint_start_time + PINPOINT_TIMOUT) < get_current_time()) {
         current_state = searching;
+        // Ensure that the flame sensor module is capturing
+        // in all directions
+        send_flame_control_data(not_specified);
     }
 }
 
 void redirect_state() {
+    // This state purely avoid obstacles
     if (dist_data > DISTANCE_THRESHOLD) {
         current_state = searching;
     }
@@ -155,8 +230,13 @@ void redirect_state() {
 }
 
 void extinguish_flame_state() {
-    if ((extinguish_start_time + 2) < get_current_time()) {
+    // The extinguish state complete when flame is no longer detected
+    if ((extinguish_start_time + EXINGUISH_TIMOUT) < get_current_time() || \
+        flame_data_front > FLAME_DETECTION_THRESHOLD) {
         current_state = searching;
+        // Ensure that the flame sensor module is capturing
+        // in all directions
+        send_flame_control_data(not_specified);
     }
 }
 
@@ -200,22 +280,38 @@ void execute_state() {
             pump_off();
             switch(currently_pinpointing) {
                 case left_pinpoint:
-                    reverse_arc_left();
+                    reverse_arc_left(160);
                     break;
                 case right_pinpoint:
-                    reverse_arc_right();
+                    reverse_arc_right(160);
                     break;
                 case back_pinpoint:
-                    sharp_right();
+                    sharp_right_var(160);
+                    break;
+                case right_sweep:
+                    sharp_right_var(160);
+                    break;
+                case left_sweep:
+                    sharp_left_var(160);
+                    break;
+                case final:
+                    sharp_right_var(160);
                     break;
             }
             break;
         case redirect:
             pump_off();
-            sharp_left();
+            // Redirect depending on the state
+            if (redirect_direction) {
+                sharp_left();
+            } else {
+                sharp_right();
+            }
             break;
         case extinguish_flame:
+            // We want to spray slightly sporatically
             extinguish_dir = rand() & 1;
+            
             if (extinguish_dir) {
                 sharp_left();
                 extinguish_dir = 0;
@@ -223,6 +319,7 @@ void execute_state() {
                 sharp_right();
                 extinguish_dir = 1;
             }
+            
             pump_on(); 
             break;
         default:
@@ -275,6 +372,7 @@ int main() {
             fprintf(stderr, "Failed to receive sensor data\n");
             continue;
         }
+        // We store the data based on the type
         switch (received_data.type) {
             case temperature_data:
                 temp_data = received_data.value;
@@ -294,6 +392,7 @@ int main() {
                         flame_data_right = received_data.value;
                         break;
                     default: 
+                        // Bad data
                         continue;
                 }
                 break;
@@ -303,7 +402,8 @@ int main() {
             default:
                 continue;
         }
-        printf("Distance: %d, Front flame: %d, Back flame: %d, Left flame: %d, Right flame: %d\n", dist_data, flame_data_front, flame_data_back, flame_data_left, flame_data_right);
+        printf("Front sensor data: %d\n", flame_data_front);
+        printf("Distance data: %d\n", dist_data);
         // Determine next state
         analyze_state();
         // Execute on state

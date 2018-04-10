@@ -41,13 +41,16 @@ void callback_function(int gpio, int level, unsigned int tick, void *t) {
 		((time_tracker *)t)->end = tick;
 		long int elapsed_time = (((time_tracker *)t)->end)-(((time_tracker *)t)->start);
 		double distance = (double)elapsed_time/USECOND_CENTIMETER_RATIO;	
-		gpioTrigger(ULTRA_SONIC_OUTPUT_PIN, 10, 1);
 		if (distance < MIN_RANGE_LENGTH || distance > MAX_RANGE_LENGTH) {
 			// We skip this reading since it is erronous either a loop in the tick
 			// counter or a hardware error. 
+			gpioTrigger(ULTRA_SONIC_OUTPUT_PIN, 10, 1);
 			return;
 		}
 		send_distance_data((int)distance);
+		gpioTrigger(ULTRA_SONIC_OUTPUT_PIN, 10, 1);
+	} else {
+		gpioTrigger(ULTRA_SONIC_OUTPUT_PIN, 10, 1);
 	}
 }
 
